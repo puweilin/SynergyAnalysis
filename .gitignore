@@ -1,0 +1,25 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# R
+.Rhistory
+.Rapp.history
+.Rproj.user/
+*.Rproj
+.RData
+.Ruserdata
+
+# Example data and outputs (per-project; not shipped)
+example/
+*.xlsx
+*.html
+*.pdf
+*.png
+*_synergy_results*
+*_synergy_report*
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
