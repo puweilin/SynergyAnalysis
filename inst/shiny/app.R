@@ -17,16 +17,22 @@ library(readr)
 # Increase file upload limit (default 5MB, NHF files are ~65MB each)
 options(shiny.maxRequestSize = 500 * 1024^2)
 
-# Robust source paths — resolve framework root relative to this app file
-app_dir <- tryCatch(
-  dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")),
-  error = function(e) getwd()
-)
-framework_root <- dirname(app_dir)
-source(file.path(framework_root, "R", "synergy_io.R"))
-source(file.path(framework_root, "R", "synergy_core.R"))
-source(file.path(framework_root, "R", "synergy_plot.R"))
-source(file.path(framework_root, "R", "synergy_report.R"))
+# Load synergy functions:
+#   - If the SynergyAnalysis package is installed, just attach it.
+#   - Otherwise (running from a source clone), fall back to source()ing the R/ files.
+if (requireNamespace("SynergyAnalysis", quietly = TRUE)) {
+  library(SynergyAnalysis)
+} else {
+  app_dir <- tryCatch(
+    dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")),
+    error = function(e) getwd()
+  )
+  framework_root <- dirname(app_dir)
+  source(file.path(framework_root, "R", "synergy_io.R"))
+  source(file.path(framework_root, "R", "synergy_core.R"))
+  source(file.path(framework_root, "R", "synergy_plot.R"))
+  source(file.path(framework_root, "R", "synergy_report.R"))
+}
 
 # ── Color palette ─────────────────────────────────────────────────────────────
 COLORS <- list(
