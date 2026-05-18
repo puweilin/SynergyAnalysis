@@ -30,6 +30,15 @@ Only requires criterion 1 (C vs NT significant + direction) plus the magnitude-a
 
 ## Installation
 
+> **Tip for users in Mainland China** — set CRAN and Bioconductor to a domestic mirror (e.g. Westlake University) before installing to avoid slow / failing downloads. Run this **once per R session**, before the `install.packages()` / `BiocManager::install()` calls below:
+>
+> ```r
+> options(repos       = c(CRAN = "https://mirrors.westlake.edu.cn/CRAN/"))
+> options(BioC_mirror = "https://mirrors.westlake.edu.cn/bioconductor")
+> ```
+>
+> Other widely used mirrors: Tsinghua (`https://mirrors.tuna.tsinghua.edu.cn/CRAN/` + `https://mirrors.tuna.tsinghua.edu.cn/bioconductor`), USTC, etc. To make the setting permanent, add the two lines to `~/.Rprofile`.
+
 ### Option A — install with `devtools` (recommended)
 
 ```r
