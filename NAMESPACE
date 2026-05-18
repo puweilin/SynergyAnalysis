@@ -10,6 +10,8 @@ export(plot_synergy_overlap)
 export(plot_synergy_heatmap)
 export(render_synergy_report)
 export(run_synergy_app)
+export(get_kegg_data_cached)
+export(kegg_cache_path)
 
 S3method(print, synergy_result)
 S3method(summary, synergy_result)

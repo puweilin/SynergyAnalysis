@@ -916,6 +916,17 @@ server <- function(input, output, session) {
   }, striped = TRUE, bordered = TRUE, spacing = "s", width = "100%")
 
   # ── Enrichment Analysis (ORA) ───────────────────────────────────────────────
+  #
+  # Performance notes:
+  #   * For GO BP we pass gene IDs (SYMBOL or ENSEMBL) directly to enrichGO with
+  #     keyType set accordingly — no bitr() round-trip to ENTREZ.
+  #   * `readable = FALSE` keeps enrichGO from converting all ~20k terms; we
+  #     apply DOSE::setReadable only on the small filtered subset afterwards.
+  #   * `universe` is supplied explicitly from the tested gene set, which is
+  #     both faster (skips OrgDb-wide universe construction) and more accurate.
+  #   * For KEGG we use a locally cached annotation (see get_kegg_data_cached)
+  #     and feed it to enricher(), which avoids the online KEGG REST round-trip
+  #     and works offline once the cache is warm.
 
   ora_result <- eventReactive(input$ora_run, {
     res <- synergy_res()
@@ -932,54 +943,82 @@ server <- function(input, output, session) {
     }
 
     keytype <- input$ora_keytype
-    gene_ids <- if (keytype == "SYMBOL") gene_df$gene_name else gene_df$gene_id
+    pick_ids <- function(df) {
+      ids <- if (keytype == "SYMBOL") df$gene_name else df$gene_id
+      if (keytype == "ENSEMBL") ids <- sub("\\..*$", "", ids)
+      unique(ids[!is.na(ids) & nzchar(ids)])
+    }
+    gene_ids <- pick_ids(gene_df)
 
-    # Strip ENSEMBL version suffix if present
-    if (keytype == "ENSEMBL") gene_ids <- sub("\\..*$", "", gene_ids)
-
-    gene_ids <- unique(gene_ids[!is.na(gene_ids) & nzchar(gene_ids)])
     if (length(gene_ids) < 3) {
       showNotification("Too few genes for enrichment.", type = "warning")
       return(NULL)
     }
 
-    withProgress(message = "Running ORA...", value = 0.3, {
+    # Background universe = all genes tested in the synergy analysis
+    universe_ids <- pick_ids(res$merged_all)
+
+    withProgress(message = "Running ORA...", value = 0.15, {
       tryCatch({
-        # Convert to ENTREZ if needed (for KEGG) or pass through for GO
-        entrez <- clusterProfiler::bitr(
-          gene_ids, fromType = keytype, toType = "ENTREZID",
-          OrgDb = org.Hs.eg.db::org.Hs.eg.db
-        )$ENTREZID
-        entrez <- unique(entrez)
-
-        incProgress(0.4)
-
-        # Run with no internal cutoff; we apply user-chosen filter post-hoc
-        ego <- if (input$ora_db == "gobp") {
-          clusterProfiler::enrichGO(
-            gene = entrez, OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-            keyType = "ENTREZID", ont = "BP",
+        if (input$ora_db == "gobp") {
+          incProgress(0.3, detail = "Running GO BP enrichment")
+          ego <- clusterProfiler::enrichGO(
+            gene          = gene_ids,
+            universe      = universe_ids,
+            OrgDb         = org.Hs.eg.db::org.Hs.eg.db,
+            keyType       = keytype,
+            ont           = "BP",
             pAdjustMethod = "BH",
-            pvalueCutoff = 1, qvalueCutoff = 1,
-            readable = TRUE
+            pvalueCutoff  = 1,
+            qvalueCutoff  = 1,
+            readable      = FALSE
           )
+          readable_keytype <- keytype
         } else {
-          clusterProfiler::enrichKEGG(
-            gene = entrez, organism = "hsa",
-            keyType = "kegg",
-            pAdjustMethod = "BH",
-            pvalueCutoff = 1, qvalueCutoff = 1
+          incProgress(0.1, detail = "Loading KEGG annotation (local cache)")
+          kegg_data <- get_kegg_data_cached("hsa")
+          showNotification(
+            sprintf("KEGG annotation: %s (cache age %.0f days)",
+                    attr(kegg_data, "source"),
+                    attr(kegg_data, "cache_age_days")),
+            type = "message", duration = 4
           )
+
+          incProgress(0.1, detail = "Mapping gene IDs to ENTREZ")
+          gmap <- clusterProfiler::bitr(
+            gene_ids,
+            fromType = keytype, toType = "ENTREZID",
+            OrgDb = org.Hs.eg.db::org.Hs.eg.db
+          )
+          umap <- clusterProfiler::bitr(
+            universe_ids,
+            fromType = keytype, toType = "ENTREZID",
+            OrgDb = org.Hs.eg.db::org.Hs.eg.db
+          )
+          entrez <- unique(gmap$ENTREZID)
+          universe_entrez <- unique(umap$ENTREZID)
+
+          incProgress(0.2, detail = "Running KEGG enrichment")
+          ego <- clusterProfiler::enricher(
+            gene          = entrez,
+            universe      = universe_entrez,
+            TERM2GENE     = kegg_data$KEGGPATHID2EXTID,
+            TERM2NAME     = kegg_data$KEGGPATHID2NAME,
+            pAdjustMethod = "BH",
+            pvalueCutoff  = 1,
+            qvalueCutoff  = 1
+          )
+          readable_keytype <- "ENTREZID"
         }
 
-        incProgress(0.3)
+        incProgress(0.25, detail = "Filtering and formatting results")
 
         if (is.null(ego) || nrow(as.data.frame(ego)) == 0) {
           showNotification("Enrichment returned no terms.", type = "warning")
           return(NULL)
         }
 
-        # Apply user-chosen filter (pvalue or p.adjust)
+        # Apply user-chosen filter (pvalue or p.adjust) post-hoc
         filter_col <- input$ora_filter_col
         keep <- ego@result[[filter_col]] <= input$ora_pcut
         keep[is.na(keep)] <- FALSE
@@ -992,14 +1031,15 @@ server <- function(input, output, session) {
           return(NULL)
         }
 
-        # Order by chosen filter column (ascending)
         ego@result <- ego@result[order(ego@result[[filter_col]]), , drop = FALSE]
 
-        # For KEGG, map ENTREZ → SYMBOL in geneID column for readability
-        if (input$ora_db == "kegg") {
-          ego <- DOSE::setReadable(ego, OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-                                    keyType = "ENTREZID")
+        # Convert gene IDs in geneID column to SYMBOL on the (small) filtered set
+        if (!identical(readable_keytype, "SYMBOL")) {
+          ego <- DOSE::setReadable(ego,
+                                    OrgDb = org.Hs.eg.db::org.Hs.eg.db,
+                                    keyType = readable_keytype)
         }
+
         ego
       }, error = function(e) {
         showNotification(paste("ORA failed:", e$message), type = "error", duration = 10)
@@ -1035,9 +1075,7 @@ server <- function(input, output, session) {
         legend.title = ggplot2::element_text(size = 13),
         plot.title   = ggplot2::element_text(size = 16)
       )
-  }) |>
-    bindCache(input$ora_run, input$ora_dir, input$ora_db,
-              input$ora_keytype, input$ora_filter_col, input$ora_pcut)
+  })
 
   output$ora_table <- renderDT({
     ego <- ora_result()
