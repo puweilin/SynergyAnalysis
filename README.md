@@ -30,56 +30,73 @@ Only requires criterion 1 (C vs NT significant + direction) plus the magnitude-a
 
 ## Installation
 
-### 1. Clone
+### Option A — install with `devtools` (recommended)
+
+```r
+if (!requireNamespace("devtools", quietly = TRUE))
+  install.packages("devtools")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+# Bioconductor dependencies for ORA (install these first)
+BiocManager::install(c(
+  "clusterProfiler", "org.Hs.eg.db", "enrichplot", "DOSE"
+))
+
+# Install SynergyAnalysis from GitHub
+devtools::install_github("puweilin/SynergyAnalysis")
+```
+
+Then load and launch:
+
+```r
+library(SynergyAnalysis)
+run_synergy_app()        # opens the Shiny app in your browser
+```
+
+To install from a local clone instead:
+
+```r
+# After: git clone https://github.com/puweilin/SynergyAnalysis.git
+devtools::install_local("SynergyAnalysis")
+```
+
+### Option B — source the scripts directly (no install)
 
 ```bash
 git clone https://github.com/puweilin/SynergyAnalysis.git
 cd SynergyAnalysis
 ```
 
-### 2. R dependencies
-
-Core analysis:
-
 ```r
 install.packages(c(
   "dplyr", "tidyr", "ggplot2", "ggrepel", "openxlsx",
-  "pheatmap", "rmarkdown", "knitr", "stringr"
-))
-```
-
-Shiny app and enrichment:
-
-```r
-install.packages(c(
+  "pheatmap", "rmarkdown", "knitr", "stringr",
   "shiny", "bslib", "DT", "plotly"
 ))
 
-# Bioconductor packages for ORA
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install(c(
   "clusterProfiler", "org.Hs.eg.db", "enrichplot", "DOSE"
 ))
-```
 
-### 3. Sanity check
-
-```r
+# Then source the files directly
 source("R/synergy_io.R")
 source("R/synergy_core.R")
-# Should print no errors
+source("R/synergy_plot.R")
+source("R/synergy_report.R")
 ```
 
 ---
 
 ## Quick start (command line)
 
+After installing via devtools:
+
 ```r
-source("R/synergy_io.R")
-source("R/synergy_core.R")
-source("R/synergy_plot.R")
-source("R/synergy_report.R")
+library(SynergyAnalysis)
 
 files <- list(
   c_vs_nt = "path/to/C_vs_Control.xls",
@@ -103,12 +120,17 @@ export_synergy_excel(res, "synergy_results.xlsx")
 render_synergy_report(res, "synergy_report.html")
 ```
 
+Without installing (source-only workflow), replace `library(SynergyAnalysis)` with the four `source()` calls shown above.
+
 ---
 
 ## Shiny app
 
 ```r
-# Launch in external browser
+# If installed as a package:
+SynergyAnalysis::run_synergy_app()
+
+# Or from a clone, without installing:
 shiny::runApp("shiny/", launch.browser = TRUE)
 ```
 

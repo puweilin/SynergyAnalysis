@@ -1,0 +1,15 @@
+# Generated manually; do not edit by hand if you regenerate roxygen docs.
+
+export(calculate_synergy)
+export(read_diff_result)
+export(validate_synergy_inputs)
+export(export_synergy_excel)
+export(plot_synergy_volcano)
+export(plot_synergy_contrib)
+export(plot_synergy_overlap)
+export(plot_synergy_heatmap)
+export(render_synergy_report)
+export(run_synergy_app)
+
+S3method(print, synergy_result)
+S3method(summary, synergy_result)

@@ -1,0 +1,40 @@
+Package: SynergyAnalysis
+Type: Package
+Title: Identify Synergistic Genes from Transcriptomics Combination Treatments
+Version: 0.1.0
+Authors@R: person("puweilin", role = c("aut", "cre"),
+                  email = "puweilin@users.noreply.github.com")
+Description: R framework and Shiny app for identifying synergistic genes from
+    transcriptomics data, where the combination treatment A+B produces an
+    effect that exceeds the sum of A alone and B alone. Supports both a strict
+    4-criteria filter (all pairwise comparisons significant + magnitude
+    additivity) and a relaxed magnitude-only mode. Includes ORA enrichment
+    (GO BP, KEGG) and Excel export with per-sample FPKM.
+License: MIT + file LICENSE
+Encoding: UTF-8
+URL: https://github.com/puweilin/SynergyAnalysis
+BugReports: https://github.com/puweilin/SynergyAnalysis/issues
+Depends:
+    R (>= 4.1)
+Imports:
+    stats,
+    utils
+Suggests:
+    ggplot2,
+    ggrepel,
+    pheatmap,
+    openxlsx,
+    rmarkdown,
+    knitr,
+    stringr,
+    shiny,
+    bslib,
+    DT,
+    plotly,
+    clusterProfiler,
+    org.Hs.eg.db,
+    enrichplot,
+    DOSE,
+    ggVennDiagram,
+    eulerr
+RoxygenNote: 7.3.1
