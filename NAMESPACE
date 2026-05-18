@@ -3,6 +3,7 @@
 export(calculate_synergy)
 export(read_diff_result)
 export(validate_synergy_inputs)
+export(synergy_qc_defaults)
 export(export_synergy_excel)
 export(plot_synergy_volcano)
 export(plot_synergy_contrib)

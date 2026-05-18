@@ -157,6 +157,27 @@ ui <- page_sidebar(
       ),
 
       accordion_panel(
+        "Gene QC",
+        value = "qc",
+        icon = icon("filter", lib = "font-awesome"),
+        checkboxInput("qc_enable", "Enable QC pre-filter", value = TRUE),
+        tags$div(style = "font-size: 0.72rem; color: #6B7A8C; margin-top:-0.25rem; margin-bottom: 0.5rem;",
+                 "Removes genes that are lowly expressed, ",
+                 "sporadically detected, or carry unstable log2FC values."),
+        conditionalPanel(
+          "input.qc_enable == true",
+          numericInput("qc_min_fpkm", "Min FPKM (any sample)",
+                       value = 1, min = 0, step = 0.1),
+          numericInput("qc_min_detect", "Min detection rate",
+                       value = 0.5, min = 0, max = 1, step = 0.05),
+          numericInput("qc_detect_fpkm", "Detection threshold (FPKM)",
+                       value = 0.1, min = 0, step = 0.05),
+          numericInput("qc_max_lfc", "Max |log2FC| (any comparison)",
+                       value = 10, min = 1, step = 0.5)
+        )
+      ),
+
+      accordion_panel(
         "Group Labels",
         value = "labels",
         icon = icon("tags", lib = "font-awesome"),
@@ -265,7 +286,7 @@ ui <- page_sidebar(
       layout_columns(
         col_widths = c(4, 4, 4),
         value_box(
-          title = "Genes tested",
+          title = "Genes (kept / merged)",
           value = textOutput("total_genes"),
           showcase = icon("dna", lib = "font-awesome"),
           theme = "primary",
@@ -620,6 +641,15 @@ server <- function(input, output, session) {
     labels <- c(nt = input$label_nt, a = input$label_a,
                 b = input$label_b, c = input$label_c)
 
+    qc_opts <- if (isTRUE(input$qc_enable)) {
+      list(
+        min_fpkm        = input$qc_min_fpkm,
+        min_detect_frac = input$qc_min_detect,
+        detect_fpkm     = input$qc_detect_fpkm,
+        max_abs_log2fc  = input$qc_max_lfc
+      )
+    } else NULL
+
     withProgress(message = "Running synergy analysis...", value = 0.5, {
       tryCatch({
         res <- calculate_synergy(
@@ -628,14 +658,18 @@ server <- function(input, output, session) {
           fc_cutoff    = input$fc_cutoff,
           use_qvalue   = (input$pval_col == "Qvalue"),
           mode         = input$mode,
+          qc           = qc_opts,
           labels       = labels
         )
         analysis_done(TRUE)
-        showNotification(
-          sprintf("Found %d UP + %d DOWN synergistic genes",
-                  res$summary$n_synergy_up, res$summary$n_synergy_down),
-          type = "message", duration = 5
-        )
+        s <- res$summary
+        msg <- sprintf("Found %d UP + %d DOWN synergistic genes",
+                       s$n_synergy_up, s$n_synergy_down)
+        if (!is.null(s$qc) && s$n_qc_dropped > 0) {
+          msg <- paste0(msg, sprintf(" (QC kept %d of %d genes)",
+                                      s$n_after_qc, s$n_total_genes))
+        }
+        showNotification(msg, type = "message", duration = 5)
         res
       }, error = function(e) {
         analysis_done(FALSE)
@@ -653,7 +687,15 @@ server <- function(input, output, session) {
 
   output$total_genes <- renderText({
     res <- synergy_res()
-    if (is.null(res)) "—" else format(res$summary$n_total_genes, big.mark = ",")
+    if (is.null(res)) return("—")
+    s <- res$summary
+    if (!is.null(s$qc) && !is.null(s$n_after_qc) && s$n_qc_dropped > 0) {
+      sprintf("%s / %s",
+              format(s$n_after_qc, big.mark = ","),
+              format(s$n_total_genes, big.mark = ","))
+    } else {
+      format(s$n_total_genes, big.mark = ",")
+    }
   })
   output$n_synergy_up <- renderText({
     res <- synergy_res()

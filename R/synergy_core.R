@@ -24,6 +24,11 @@
 #' @param use_qvalue Use Qvalue (TRUE, default) or Pvalue (FALSE) for significance.
 #' @param mode "strict" (default; all 4 criteria) or "relaxed" (only C vs NT
 #'   significance + magnitude criterion).
+#' @param qc Either a list of options for the gene QC pre-filter (see
+#'   \code{synergy_qc_defaults()}) or \code{NULL} to disable QC entirely.
+#'   The QC step removes obvious artefacts (low / sporadic expression and
+#'   genes with extreme, unstable log2FC values) before the synergy criteria
+#'   are evaluated.
 #' @param labels Display names for groups: c(nt="NT", a="A", b="B", c="C")
 #' @return An S3 object of class "synergy_result"
 #' @export
@@ -32,6 +37,7 @@ calculate_synergy <- function(results_list,
                                fc_cutoff = 0,
                                use_qvalue = TRUE,
                                mode = c("strict", "relaxed"),
+                               qc = synergy_qc_defaults(),
                                labels = c(nt = "NT", a = "A", b = "B", c = "C")) {
 
   mode <- match.arg(mode)
@@ -91,6 +97,16 @@ calculate_synergy <- function(results_list,
 
   n_total <- nrow(merged)
   message(sprintf("Merged: %d genes across 5 comparisons", n_total))
+
+  # ---------- QC pre-filter (drops obvious artefacts) ----------
+  qc_out <- apply_gene_qc(merged, fpkm_mat, qc)
+  merged <- qc_out$merged
+  qc_log <- qc_out$log
+  n_after_qc <- nrow(merged)
+  if (!is.null(qc) && n_after_qc < n_total) {
+    message(sprintf("QC: kept %d of %d genes (%d dropped)",
+                    n_after_qc, n_total, n_total - n_after_qc))
+  }
 
   # Compute FC and effect metrics
   merged$FC_c_vs_nt  <- 2 ^ merged$log2FC_c_vs_nt
@@ -183,6 +199,8 @@ calculate_synergy <- function(results_list,
   # ---------- Summary ----------
   summary <- list(
     n_total_genes    = n_total,
+    n_after_qc       = n_after_qc,
+    n_qc_dropped     = n_total - n_after_qc,
     n_synergy_up     = nrow(synergy_up),
     n_synergy_down   = nrow(synergy_down),
     p_cutoff         = p_cutoff,
@@ -190,6 +208,8 @@ calculate_synergy <- function(results_list,
     use_qvalue       = use_qvalue,
     pval_column_used = pval_col,
     mode             = mode,
+    qc               = qc,
+    qc_log           = qc_log,
     labels           = labels
   )
 
@@ -199,7 +219,8 @@ calculate_synergy <- function(results_list,
     synergy_down  = synergy_down,
     summary       = summary,
     params        = list(p_cutoff = p_cutoff, fc_cutoff = fc_cutoff,
-                         use_qvalue = use_qvalue, mode = mode, labels = labels),
+                         use_qvalue = use_qvalue, mode = mode,
+                         qc = qc, labels = labels),
     merged_all    = merged,
     fpkm_all      = fpkm_mat
   )
@@ -218,8 +239,13 @@ print.synergy_result <- function(x, ...) {
   s <- x$summary
   cat("── Synergy Analysis Result ───────────────────────────────\n")
   cat(sprintf("  Mode                      : %s\n", s$mode))
-  cat(sprintf("  Total genes tested        : %d\n", s$n_total_genes))
-  cat(sprintf("  P-value threshold (Qvalue): %.3g\n", s$p_cutoff))
+  cat(sprintf("  Total genes (after merge) : %d\n", s$n_total_genes))
+  if (!is.null(s$qc)) {
+    cat(sprintf("  After QC                  : %d (dropped %d)\n",
+                s$n_after_qc, s$n_qc_dropped))
+  }
+  cat(sprintf("  P-value threshold (%s): %.3g\n",
+              if (s$use_qvalue) "Qvalue" else "Pvalue", s$p_cutoff))
   cat(sprintf("  |log2FC| threshold        : %.2f\n", s$fc_cutoff))
   cat(sprintf("  Synergistic UP   genes    : %d\n", s$n_synergy_up))
   cat(sprintf("  Synergistic DOWN genes    : %d\n", s$n_synergy_down))
@@ -261,15 +287,39 @@ export_synergy_excel <- function(synergy_res, output_path) {
   # Sheet 1: Summary
   openxlsx::addWorksheet(wb, "Summary")
   s <- synergy_res$summary
-  summary_df <- data.frame(
-    Metric = c("Total genes tested", "Synergistic UP genes", "Synergistic DOWN genes",
-               "P-value cutoff", "|log2FC| cutoff", "P-value column used",
-               "Group NT", "Group A", "Group B", "Group C"),
-    Value  = c(s$n_total_genes, s$n_synergy_up, s$n_synergy_down,
-               s$p_cutoff, s$fc_cutoff, s$pval_column_used,
-               s$labels["nt"], s$labels["a"], s$labels["b"], s$labels["c"])
+  summary_rows <- list(
+    c("Total genes (after merge)", s$n_total_genes),
+    c("After QC",                  if (!is.null(s$qc)) s$n_after_qc else "—"),
+    c("QC dropped",                if (!is.null(s$qc)) s$n_qc_dropped else "—"),
+    c("Synergistic UP genes",      s$n_synergy_up),
+    c("Synergistic DOWN genes",    s$n_synergy_down),
+    c("P-value cutoff",            s$p_cutoff),
+    c("|log2FC| cutoff",           s$fc_cutoff),
+    c("P-value column used",       s$pval_column_used),
+    c("Mode",                      s$mode),
+    c("Group NT",                  s$labels["nt"]),
+    c("Group A",                   s$labels["a"]),
+    c("Group B",                   s$labels["b"]),
+    c("Group C",                   s$labels["c"])
   )
+  if (!is.null(s$qc)) {
+    qc <- s$qc
+    summary_rows <- c(summary_rows, list(
+      c("QC: min FPKM (any sample)",      qc$min_fpkm),
+      c("QC: min detection rate",         qc$min_detect_frac),
+      c("QC: detection threshold (FPKM)", qc$detect_fpkm),
+      c("QC: max |log2FC|",               qc$max_abs_log2fc)
+    ))
+  }
+  summary_df <- do.call(rbind, lapply(summary_rows, function(r)
+    data.frame(Metric = r[1], Value = as.character(r[2]),
+               stringsAsFactors = FALSE)))
   openxlsx::writeData(wb, "Summary", summary_df)
+
+  if (!is.null(s$qc_log) && nrow(s$qc_log) > 0) {
+    openxlsx::addWorksheet(wb, "QC_Log")
+    openxlsx::writeData(wb, "QC_Log", s$qc_log)
+  }
 
   # Sheet 2: Synergy UP genes (select key columns)
   openxlsx::addWorksheet(wb, "Synergy_UP")

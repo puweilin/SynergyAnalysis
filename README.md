@@ -26,6 +26,16 @@ For **synergistic DOWN**, replace `> 0` with `< 0` and `Increase` with `Decrease
 
 Only requires criterion 1 (C vs NT significant + direction) plus the magnitude-additivity criterion (4). Useful when A or B alone is already strongly significant, making C vs A / C vs B hard to detect at FDR thresholds even when supra-additivity is real.
 
+### Gene QC pre-filter
+
+Before the synergy criteria are evaluated, an optional QC step removes obvious artefacts:
+
+- **Min FPKM (any sample)** — drop genes that never reach FPKM ≥ 1 in any sample. Catches near-zero genes whose log2FC is dominated by a tiny denominator.
+- **Detection rate** — require FPKM > 0.1 in at least 50% of samples. Filters out genes detected only sporadically.
+- **Unstable log2FC** — drop genes whose `|log2FC|` exceeds 10 in any of the 5 comparisons (typically denominator-near-zero artefacts).
+
+Defaults are conservative; thresholds are exposed in the Shiny sidebar (Gene QC panel) and through `qc = list(...)` on `calculate_synergy()`. Pass `qc = NULL` to disable QC entirely. The Summary sheet of the exported Excel records the thresholds used and how many genes each rule dropped (`QC_Log` sheet).
+
 ---
 
 ## Installation
