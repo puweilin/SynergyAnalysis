@@ -69,6 +69,18 @@ COLORS <- list(
   card_bg   = "#FFFFFF"
 )
 
+# ── Fonts ─────────────────────────────────────────────────────────────────────
+# Prefer Inter, but never let the theme block the app on it. `local = FALSE`
+# emits a browser-side CDN <link> instead of a server-side curl download, which
+# otherwise crashes app startup on networks that can't reach fonts.googleapis.com
+# (the download failure is fatal during theme dependency resolution). A system
+# font stack provides the fallback when the CDN is unreachable.
+app_font <- bslib::font_collection(
+  bslib::font_google("Inter", wght = c(300, 400, 500, 600, 700), local = FALSE),
+  "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI",
+  "Roboto", "Helvetica Neue", "Arial", "sans-serif"
+)
+
 # ── UI ────────────────────────────────────────────────────────────────────────
 
 ui <- page_sidebar(
@@ -80,8 +92,8 @@ ui <- page_sidebar(
   theme = bs_theme(
     version      = 5,
     primary      = COLORS$primary,
-    base_font    = bslib::font_google("Inter", wght = c(300, 400, 500, 600)),
-    heading_font = bslib::font_google("Inter", wght = c(500, 600, 700)),
+    base_font    = app_font,
+    heading_font = app_font,
     font_scale   = 0.92,
     bg           = COLORS$bg,
     fg           = "#2C3E50",
