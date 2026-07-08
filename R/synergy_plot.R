@@ -1,4 +1,4 @@
-# synergy_plot.R — Publication-quality visualizations for synergy results
+# synergy_plot.R - Publication-quality visualizations for synergy results
 
 # Color palette
 SYNERGY_COLORS <- c(
@@ -25,6 +25,12 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
   merged <- synergy_res$merged_all
   synergy_ids <- c(synergy_res$synergy_up$gene_id, synergy_res$synergy_down$gene_id)
 
+  # Significance axis follows the column the synergy call actually used, so the
+  # dashed p_cutoff line and the y-axis stay consistent with the gene set.
+  use_q <- isTRUE(synergy_res$params$use_qvalue)
+  pcol  <- if (use_q) "Qvalue_c_vs_nt" else "Pvalue_c_vs_nt"
+  plab  <- if (use_q) "Q-value" else "P-value"
+
   merged$category <- "Non-significant"
   merged$category[merged$gene_id %in% synergy_res$synergy_up$gene_id]   <- "Synergy UP"
   merged$category[merged$gene_id %in% synergy_res$synergy_down$gene_id] <- "Synergy DOWN"
@@ -36,7 +42,7 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
   cap <- min(max_fc + 1, 15)
 
   merged$log2FC_c_vs_nt_plot <- pmax(-cap, pmin(cap, merged$log2FC_c_vs_nt_plot))
-  merged$nlog10_q <- -log10(merged$Qvalue_c_vs_nt)
+  merged$nlog10_q <- -log10(merged[[pcol]])
   # Q-values that underflow to 0 give -log10 = Inf and would silently drop the
   # most significant genes from the plot. Pin them to the finite maximum.
   finite_max <- suppressWarnings(max(merged$nlog10_q[is.finite(merged$nlog10_q)]))
@@ -71,8 +77,8 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
     ggplot2::geom_hline(yintercept = -log10(synergy_res$params$p_cutoff),
                         linetype = "dashed", color = "grey40") +
     ggplot2::labs(
-      x = expression(log[2] * "(Fold Change) — " * C * " vs " * NT),
-      y = expression(-log[10] * "(Q-value)"),
+      x = expression(log[2] * "(Fold Change) - " * C * " vs " * NT),
+      y = bquote(-log[10] * "(" * .(plab) * ")"),
       color = "Category",
       title = paste0("Synergy Volcano: ", synergy_res$params$labels["c"],
                      " vs ", synergy_res$params$labels["nt"])
@@ -165,9 +171,11 @@ plot_synergy_overlap <- function(synergy_res) {
   merged <- synergy_res$merged_all
   p_cutoff <- synergy_res$params$p_cutoff
 
-  sig_c_vs_nt <- merged$gene_id[merged$Qvalue_c_vs_nt < p_cutoff]
-  sig_a_vs_nt <- merged$gene_id[merged$Qvalue_a_vs_nt < p_cutoff]
-  sig_b_vs_nt <- merged$gene_id[merged$Qvalue_b_vs_nt < p_cutoff]
+  # Use the same significance column the synergy call used (P vs Q).
+  pfx <- if (isTRUE(synergy_res$params$use_qvalue)) "Qvalue_" else "Pvalue_"
+  sig_c_vs_nt <- merged$gene_id[merged[[paste0(pfx, "c_vs_nt")]] < p_cutoff]
+  sig_a_vs_nt <- merged$gene_id[merged[[paste0(pfx, "a_vs_nt")]] < p_cutoff]
+  sig_b_vs_nt <- merged$gene_id[merged[[paste0(pfx, "b_vs_nt")]] < p_cutoff]
 
   synergy_ids <- c(synergy_res$synergy_up$gene_id, synergy_res$synergy_down$gene_id)
 
@@ -224,7 +232,7 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
   ]
 
   # Direction is decided per gene_id (unique). Gene symbols can be duplicated
-  # across paralogues, so build unique but still-readable row labels — assigning
+  # across paralogues, so build unique but still-readable row labels - assigning
   # duplicated names as rownames would otherwise error.
   direction  <- ifelse(sel$gene_id %in% synergy_res$synergy_up$gene_id, "UP", "DOWN")
   row_labels <- make.unique(sel$gene_name)

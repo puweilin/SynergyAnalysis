@@ -1,0 +1,9 @@
+^example$
+^shiny$
+^LICENSE\.md$
+^\.github$
+^\.git$
+^\.gitignore$
+\.DS_Store$
+^.*\.Rproj$
+^\.Rproj\.user$

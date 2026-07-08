@@ -1,4 +1,4 @@
-# synergy_report.R — Automated report generation for synergy results
+# synergy_report.R - Automated report generation for synergy results
 
 #' Render an HTML report for synergy analysis results
 #'
@@ -45,6 +45,12 @@ generate_report_rmd <- function(synergy_res, title) {
     "all 4 strict synergy criteria"
   }
 
+  # Significance column actually used for the call (Qvalue or Pvalue), so the
+  # report table matches the filtering rather than always showing Qvalue.
+  pcol     <- s$pval_column_used            # "Qvalue" or "Pvalue"
+  pcol_c   <- paste0(pcol, "_c_vs_nt")      # data column, e.g. "Pvalue_c_vs_nt"
+  pcol_lab <- paste0(pcol, "_CvsNT")        # display header
+
   c(
     "---",
     paste0('title: "', title, '"'),
@@ -63,6 +69,7 @@ generate_report_rmd <- function(synergy_res, title) {
     paste0("| Total genes tested | ", s$n_total_genes, " |"),
     paste0("| Synergistic UP genes | ", s$n_synergy_up, " |"),
     paste0("| Synergistic DOWN genes | ", s$n_synergy_down, " |"),
+    paste0("| Significance column | ", pcol, " |"),
     paste0("| P-value cutoff | ", s$p_cutoff, " |"),
     paste0("| |log2FC| cutoff | ", s$fc_cutoff, " |"),
     paste0("| Group labels | NT=", ln, ", A=", la, ", B=", lb, ", C=", lc, " |"),
@@ -80,9 +87,9 @@ generate_report_rmd <- function(synergy_res, title) {
     "```{r up_table}",
     "if (nrow(synergy_res$synergy_up) > 0) {",
     "  up_show <- synergy_res$synergy_up[, c('gene_name', 'log2FC_c_vs_nt', 'log2FC_a_vs_nt',",
-    "    'log2FC_b_vs_nt', 'Increase_c_vs_nt', 'Increase_sum_ab', 'Qvalue_c_vs_nt')]",
+    paste0("    'log2FC_b_vs_nt', 'Increase_c_vs_nt', 'Increase_sum_ab', '", pcol_c, "')]"),
     paste0("  colnames(up_show) <- c('Gene', '", lc_nt, "', '", la_nt, "', '", lb_nt, "',"),
-    "    'Increase_CvsNT', 'Increase_Sum_AB', 'Qvalue_CvsNT')",
+    paste0("    'Increase_CvsNT', 'Increase_Sum_AB', '", pcol_lab, "')"),
     "  knitr::kable(up_show, digits = 3, format = 'html')",
     "} else {",
     "  cat('No synergistic UP genes found.')",
@@ -100,9 +107,9 @@ generate_report_rmd <- function(synergy_res, title) {
     "```{r down_table}",
     "if (nrow(synergy_res$synergy_down) > 0) {",
     "  down_show <- synergy_res$synergy_down[, c('gene_name', 'log2FC_c_vs_nt', 'log2FC_a_vs_nt',",
-    "    'log2FC_b_vs_nt', 'Decrease_c_vs_nt', 'Decrease_sum_ab', 'Qvalue_c_vs_nt')]",
+    paste0("    'log2FC_b_vs_nt', 'Decrease_c_vs_nt', 'Decrease_sum_ab', '", pcol_c, "')]"),
     paste0("  colnames(down_show) <- c('Gene', '", lc_nt, "', '", la_nt, "', '", lb_nt, "',"),
-    "    'Decrease_CvsNT', 'Decrease_Sum_AB', 'Qvalue_CvsNT')",
+    paste0("    'Decrease_CvsNT', 'Decrease_Sum_AB', '", pcol_lab, "')"),
     "  knitr::kable(down_show, digits = 3, format = 'html')",
     "} else {",
     "  cat('No synergistic DOWN genes found.')",

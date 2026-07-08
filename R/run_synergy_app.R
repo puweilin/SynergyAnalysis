@@ -1,4 +1,4 @@
-# run_synergy_app.R — Launch the bundled Shiny app
+# run_synergy_app.R - Launch the bundled Shiny app
 
 #' Launch the Synergy Analysis Shiny app
 #'
@@ -17,8 +17,22 @@
 #'
 #' @export
 run_synergy_app <- function(launch.browser = TRUE, ...) {
-  if (!requireNamespace("shiny", quietly = TRUE)) {
-    stop("Package 'shiny' is required to launch the app. Install with: install.packages('shiny')")
+  # The app attaches these at startup; check them all up front so a missing one
+  # gives an actionable message instead of a cryptic error mid-launch.
+  needed <- c("shiny", "bslib", "ggplot2", "plotly", "DT")
+  missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing) > 0) {
+    stop("The Shiny app needs these packages: ", paste(missing, collapse = ", "),
+         ".\nInstall them with:\n  install.packages(c(",
+         paste(sprintf('"%s"', missing), collapse = ", "), "))", call. = FALSE)
+  }
+  # Enrichment (ORA) additionally needs Bioconductor packages; warn but don't
+  # block, since the rest of the app works without them.
+  ora_pkgs <- c("clusterProfiler", "org.Hs.eg.db", "enrichplot", "DOSE", "stringr")
+  ora_missing <- ora_pkgs[!vapply(ora_pkgs, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(ora_missing) > 0) {
+    message("Note: the Enrichment tab needs these packages (install to enable): ",
+            paste(ora_missing, collapse = ", "), ".")
   }
   app_dir <- system.file("shiny", package = "SynergyAnalysis")
   if (!nzchar(app_dir)) {

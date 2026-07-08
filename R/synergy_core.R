@@ -1,14 +1,14 @@
-# synergy_core.R — Synergy calculation engine
+# synergy_core.R - Synergy calculation engine
 
 #' Calculate synergistic gene effects
 #'
 #' Two synergy modes:
-#'   * "strict"  — all 4 criteria must hold (the original definition):
+#'   * "strict"  - all 4 criteria must hold (the original definition):
 #'       1-3. C vs NT, C vs A, C vs B all significant at p < p_cutoff,
 #'            with the correct direction in every comparison.
 #'       4.   Increase(CvsNT) > Increase(AvsNT) + Increase(BvsNT)  [UP]
 #'            Decrease(CvsNT) > Decrease(AvsNT) + Decrease(BvsNT)  [DOWN]
-#'   * "relaxed" — only requires C vs NT to be statistically significant,
+#'   * "relaxed" - only requires C vs NT to be statistically significant,
 #'                 plus the magnitude-additivity criterion (4) above.
 #'                 Useful when individual A or B effects are also strong:
 #'                 statistical detection of C > A or C > B is hard, but
@@ -237,7 +237,7 @@ calculate_synergy <- function(results_list,
 #' @export
 print.synergy_result <- function(x, ...) {
   s <- x$summary
-  cat("── Synergy Analysis Result ───────────────────────────────\n")
+  cat("-- Synergy Analysis Result -------------------------------\n")
   cat(sprintf("  Mode                      : %s\n", s$mode))
   cat(sprintf("  Total genes (after merge) : %d\n", s$n_total_genes))
   if (!is.null(s$qc)) {
@@ -249,7 +249,7 @@ print.synergy_result <- function(x, ...) {
   cat(sprintf("  |log2FC| threshold        : %.2f\n", s$fc_cutoff))
   cat(sprintf("  Synergistic UP   genes    : %d\n", s$n_synergy_up))
   cat(sprintf("  Synergistic DOWN genes    : %d\n", s$n_synergy_down))
-  cat("──────────────────────────────────────────────────────────\n")
+  cat("----------------------------------------------------------\n")
   if (s$n_synergy_up > 0) {
     cat("Top UP genes:\n")
     print(head(x$synergy_up[, c("gene_name", "log2FC_c_vs_nt",
@@ -289,8 +289,8 @@ export_synergy_excel <- function(synergy_res, output_path) {
   s <- synergy_res$summary
   summary_rows <- list(
     c("Total genes (after merge)", s$n_total_genes),
-    c("After QC",                  if (!is.null(s$qc)) s$n_after_qc else "—"),
-    c("QC dropped",                if (!is.null(s$qc)) s$n_qc_dropped else "—"),
+    c("After QC",                  if (!is.null(s$qc)) s$n_after_qc else "-"),
+    c("QC dropped",                if (!is.null(s$qc)) s$n_qc_dropped else "-"),
     c("Synergistic UP genes",      s$n_synergy_up),
     c("Synergistic DOWN genes",    s$n_synergy_down),
     c("P-value cutoff",            s$p_cutoff),
@@ -321,12 +321,16 @@ export_synergy_excel <- function(synergy_res, output_path) {
     openxlsx::writeData(wb, "QC_Log", s$qc_log)
   }
 
+  # Significance columns follow the column the call used (P vs Q).
+  sig_cols <- paste0(if (isTRUE(synergy_res$params$use_qvalue)) "Qvalue_" else "Pvalue_",
+                     c("c_vs_nt", "c_vs_a", "c_vs_b"))
+
   # Sheet 2: Synergy UP genes (select key columns)
   openxlsx::addWorksheet(wb, "Synergy_UP")
   if (nrow(synergy_res$synergy_up) > 0) {
     up_cols <- c("gene_id", "gene_name", "log2FC_c_vs_nt", "log2FC_a_vs_nt",
                  "log2FC_b_vs_nt", "log2FC_c_vs_a", "log2FC_c_vs_b",
-                 "Qvalue_c_vs_nt", "Qvalue_c_vs_a", "Qvalue_c_vs_b",
+                 sig_cols,
                  "FC_c_vs_nt", "FC_a_vs_nt", "FC_b_vs_nt",
                  "Increase_c_vs_nt", "Increase_a_vs_nt", "Increase_b_vs_nt",
                  "Increase_sum_ab")
@@ -338,7 +342,7 @@ export_synergy_excel <- function(synergy_res, output_path) {
   if (nrow(synergy_res$synergy_down) > 0) {
     down_cols <- c("gene_id", "gene_name", "log2FC_c_vs_nt", "log2FC_a_vs_nt",
                    "log2FC_b_vs_nt", "log2FC_c_vs_a", "log2FC_c_vs_b",
-                   "Qvalue_c_vs_nt", "Qvalue_c_vs_a", "Qvalue_c_vs_b",
+                   sig_cols,
                    "FC_c_vs_nt", "FC_a_vs_nt", "FC_b_vs_nt",
                    "Decrease_c_vs_nt", "Decrease_a_vs_nt", "Decrease_b_vs_nt",
                    "Decrease_sum_ab")
@@ -353,7 +357,7 @@ export_synergy_excel <- function(synergy_res, output_path) {
       if (nrow(gene_df) == 0) return(invisible(NULL))
       sub <- fpkm_mat[match(gene_df$gene_id, fpkm_mat$gene_id), , drop = FALSE]
       sub <- cbind(gene_name = gene_df$gene_name, sub)
-      # Reorder samples: NT first, then A, B, C — heuristic by prefix from the
+      # Reorder samples: NT first, then A, B, C - heuristic by prefix from the
       # comparison files isn't reliable here, so keep file-discovery order.
       openxlsx::writeData(wb, sheet_name, sub)
     }

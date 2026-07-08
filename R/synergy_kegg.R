@@ -1,4 +1,4 @@
-# synergy_kegg.R — Local KEGG annotation cache with online fallback
+# synergy_kegg.R - Local KEGG annotation cache with online fallback
 
 #' Get KEGG pathway annotation, preferring a local cache
 #'

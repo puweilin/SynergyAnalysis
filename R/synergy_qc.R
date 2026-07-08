@@ -1,4 +1,4 @@
-# synergy_qc.R — Upstream gene-level QC for the synergy pipeline
+# synergy_qc.R - Upstream gene-level QC for the synergy pipeline
 
 #' Default options for the gene QC pre-filter
 #'
@@ -6,7 +6,7 @@
 #' Pass the result (or a modified version) to \code{calculate_synergy(qc = ...)}.
 #' Pass \code{NULL} to \code{calculate_synergy(qc = NULL)} to disable QC entirely.
 #'
-#' Defaults are deliberately permissive — they drop genes that are clearly
+#' Defaults are deliberately permissive - they drop genes that are clearly
 #' artefactual without trimming real signal:
 #'
 #' \describe{
@@ -127,13 +127,19 @@ apply_gene_qc <- function(merged, fpkm_mat, qc) {
     lfc_cols <- grep("^log2FC_", colnames(merged), value = TRUE)
     if (length(lfc_cols) > 0) {
       mat <- as.matrix(merged[, lfc_cols, drop = FALSE])
-      mat[!is.finite(mat)] <- NA  # treat Inf as extreme
-      max_abs <- suppressWarnings(apply(abs(mat), 1, max, na.rm = TRUE))
-      max_abs[!is.finite(max_abs)] <- 0  # all-NA rows: don't drop here
-      fail_lfc <- max_abs > qc$max_abs_log2fc
+      # An infinite log2FC (a group with ~0 expression) is the single most
+      # extreme, unstable case and MUST be dropped. Keep genuine NA (untested)
+      # out of the max so it does not, on its own, trigger a drop.
+      has_inf  <- apply(matrix(is.infinite(mat), nrow = nrow(mat)), 1, any)
+      abs_mat  <- abs(mat)
+      abs_mat[!is.finite(abs_mat)] <- NA
+      max_abs  <- suppressWarnings(apply(abs_mat, 1, max, na.rm = TRUE))
+      max_abs[!is.finite(max_abs)] <- 0  # all-NA rows: nothing finite to judge
+      fail_lfc <- has_inf | (max_abs > qc$max_abs_log2fc)
       log_df <- rbind(log_df, data.frame(
         check = "Unstable log2FC",
-        threshold = sprintf("|log2FC| <= %g in all 5 comparisons", qc$max_abs_log2fc),
+        threshold = sprintf("|log2FC| <= %g and finite in all 5 comparisons",
+                            qc$max_abs_log2fc),
         dropped = sum(fail_lfc & keep),
         stringsAsFactors = FALSE
       ))
