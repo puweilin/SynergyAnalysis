@@ -23,7 +23,6 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
   if (!requireNamespace("ggrepel", quietly = TRUE)) stop("Package 'ggrepel' is required")
 
   merged <- synergy_res$merged_all
-  synergy_ids <- c(synergy_res$synergy_up$gene_id, synergy_res$synergy_down$gene_id)
 
   # Significance axis follows the column the synergy call actually used, so the
   # dashed p_cutoff line and the y-axis stay consistent with the gene set.
@@ -196,10 +195,12 @@ plot_synergy_overlap <- function(synergy_res) {
   }
 }
 
-#' Heatmap of top synergistic genes across all 4 groups
+#' Heatmap of top synergistic genes
 #'
-#' Uses FPKM or count data if available in the input files.
-#' Falls back to log2FC values otherwise.
+#' Uses log2FC values by default. If \code{use_fpkm = TRUE} and the input files
+#' contained \code{*_FPKM} columns, the heatmap uses log2(FPKM + 1) values
+#' instead. If FPKM data are requested but unavailable, the function warns and
+#' falls back to log2FC values.
 #'
 #' @param synergy_res A synergy_result object
 #' @param n_top Number of top genes per direction (default 20)
@@ -218,15 +219,16 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
   if (length(all_genes) == 0) { message("No synergistic genes for heatmap."); return(NULL) }
 
   labels <- synergy_res$params$labels
-
-  # Pull the log2FC rows for the selected genes, keyed by the unique gene_id.
-  fc_cols <- c("log2FC_c_vs_nt", "log2FC_a_vs_nt", "log2FC_b_vs_nt",
-               "log2FC_c_vs_a", "log2FC_c_vs_b")
   sel <- synergy_res$merged_all[
-    synergy_res$merged_all$gene_id %in% all_genes,
-    c("gene_id", "gene_name", fc_cols),
+    match(all_genes, synergy_res$merged_all$gene_id),
+    c("gene_id", "gene_name"),
     drop = FALSE
   ]
+  sel <- sel[!is.na(sel$gene_id), , drop = FALSE]
+  if (nrow(sel) == 0) {
+    message("No selected synergistic genes found in merged results.")
+    return(NULL)
+  }
 
   # Direction is decided per gene_id (unique). Gene symbols can be duplicated
   # across paralogues, so build unique but still-readable row labels - assigning
@@ -234,24 +236,75 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
   direction  <- ifelse(sel$gene_id %in% synergy_res$synergy_up$gene_id, "UP", "DOWN")
   row_labels <- make.unique(sel$gene_name)
 
-  fc_mat <- as.matrix(sel[, fc_cols, drop = FALSE])
-  rownames(fc_mat) <- row_labels
+  fpkm_mat <- synergy_res$fpkm_all
+  fpkm_cols <- if (is.null(fpkm_mat)) character() else setdiff(colnames(fpkm_mat), "gene_id")
+  use_fpkm_data <- isTRUE(use_fpkm) && length(fpkm_cols) > 0
 
-  # Cap extreme values
-  fc_mat[is.infinite(fc_mat)] <- NA
-  max_val <- max(abs(fc_mat), na.rm = TRUE)
-  if (max_val == 0 || is.na(max_val)) max_val <- 1
-  cap_val <- min(max_val, 10)
-  fc_mat[fc_mat > cap_val]  <- cap_val
-  fc_mat[fc_mat < -cap_val] <- -cap_val
+  if (isTRUE(use_fpkm) && !use_fpkm_data) {
+    warning("FPKM data were requested but no *_FPKM columns are available; ",
+            "falling back to log2FC values.", call. = FALSE)
+  }
 
-  colnames(fc_mat) <- c(
-    paste0(labels["c"], " vs ", labels["nt"]),
-    paste0(labels["a"], " vs ", labels["nt"]),
-    paste0(labels["b"], " vs ", labels["nt"]),
-    paste0(labels["c"], " vs ", labels["a"]),
-    paste0(labels["c"], " vs ", labels["b"])
-  )
+  if (use_fpkm_data) {
+    heat_mat <- fpkm_mat[match(sel$gene_id, fpkm_mat$gene_id),
+                         fpkm_cols, drop = FALSE]
+    heat_mat <- as.matrix(heat_mat)
+    suppressWarnings(storage.mode(heat_mat) <- "numeric")
+    rownames(heat_mat) <- row_labels
+    heat_mat[!is.finite(heat_mat)] <- NA
+    heat_mat <- log2(heat_mat + 1)
+    finite_vals <- heat_mat[is.finite(heat_mat)]
+    if (length(finite_vals) == 0) {
+      message("No finite FPKM values for selected synergistic genes.")
+      return(NULL)
+    }
+    heat_colors <- colorRampPalette(c("white", "#FEC44F", "#B2182B"))(100)
+    heat_breaks <- if (length(unique(finite_vals)) > 1) {
+      range_vals <- range(finite_vals)
+      seq(range_vals[1], range_vals[2], length.out = 101)
+    } else {
+      center <- finite_vals[1]
+      delta <- max(abs(center) * 0.01, 1e-6)
+      seq(center - delta, center + delta, length.out = 101)
+    }
+    heat_title <- paste0("Synergistic Gene log2(FPKM + 1) Heatmap (top ",
+                         n_top, " each)")
+  } else {
+    # Pull the log2FC rows for the selected genes, keyed by the unique gene_id.
+    fc_cols <- c("log2FC_c_vs_nt", "log2FC_a_vs_nt", "log2FC_b_vs_nt",
+                 "log2FC_c_vs_a", "log2FC_c_vs_b")
+    fc_sel <- synergy_res$merged_all[
+      match(sel$gene_id, synergy_res$merged_all$gene_id),
+      fc_cols,
+      drop = FALSE
+    ]
+    heat_mat <- as.matrix(fc_sel)
+    rownames(heat_mat) <- row_labels
+
+    # Cap extreme values
+    heat_mat[is.infinite(heat_mat)] <- NA
+    finite_vals <- heat_mat[is.finite(heat_mat)]
+    if (length(finite_vals) == 0) {
+      message("No finite log2FC values for selected synergistic genes.")
+      return(NULL)
+    }
+    max_val <- max(abs(finite_vals), na.rm = TRUE)
+    if (max_val == 0 || is.na(max_val)) max_val <- 1
+    cap_val <- min(max_val, 10)
+    heat_mat[heat_mat > cap_val]  <- cap_val
+    heat_mat[heat_mat < -cap_val] <- -cap_val
+
+    colnames(heat_mat) <- c(
+      paste0(labels["c"], " vs ", labels["nt"]),
+      paste0(labels["a"], " vs ", labels["nt"]),
+      paste0(labels["b"], " vs ", labels["nt"]),
+      paste0(labels["c"], " vs ", labels["a"]),
+      paste0(labels["c"], " vs ", labels["b"])
+    )
+    heat_colors <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(100)
+    heat_breaks <- seq(-cap_val, cap_val, length.out = 101)
+    heat_title <- paste0("Synergistic Gene log2FC Heatmap (top ", n_top, " each)")
+  }
 
   # Annotation for direction
   has_up   <- any(direction == "UP")
@@ -266,18 +319,23 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
   )
   anno_colors <- list(Direction = dir_colors)
 
-  pheatmap::pheatmap(fc_mat,
-    color         = colorRampPalette(c("#2166AC", "white", "#B2182B"))(100),
-    breaks        = seq(-cap_val, cap_val, length.out = 101),
+  heat_args <- list(
+    mat           = heat_mat,
+    color         = heat_colors,
     annotation_row = anno,
     annotation_colors = anno_colors,
-    cluster_rows   = TRUE,
+    cluster_rows   = nrow(heat_mat) >= 2,
     cluster_cols   = FALSE,
     show_rownames  = TRUE,
     fontsize_row   = 7,
     fontface_row   = "italic",
     border_color   = NA,
-    main           = paste0("Synergistic Gene log2FC Heatmap (top ", n_top, " each)"),
+    main           = heat_title,
     angle_col      = 45
   )
+  if (!is.null(heat_breaks)) {
+    heat_args$breaks <- heat_breaks
+  }
+
+  do.call(pheatmap::pheatmap, heat_args)
 }

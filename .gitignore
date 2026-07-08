@@ -9,6 +9,8 @@ Thumbs.db
 *.Rproj
 .RData
 .Ruserdata
+*.tar.gz
+*.Rcheck/
 
 # Example data and outputs (per-project; not shipped)
 example/

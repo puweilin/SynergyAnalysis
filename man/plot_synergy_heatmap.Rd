@@ -2,7 +2,7 @@
 % Please edit documentation in R/synergy_plot.R
 \name{plot_synergy_heatmap}
 \alias{plot_synergy_heatmap}
-\title{Heatmap of top synergistic genes across all 4 groups}
+\title{Heatmap of top synergistic genes}
 \usage{
 plot_synergy_heatmap(synergy_res, n_top = 20, use_fpkm = FALSE)
 }
@@ -17,6 +17,8 @@ plot_synergy_heatmap(synergy_res, n_top = 20, use_fpkm = FALSE)
 A pheatmap object
 }
 \description{
-Uses FPKM or count data if available in the input files.
-Falls back to log2FC values otherwise.
+Uses log2FC values by default. If \code{use_fpkm = TRUE} and the input files
+contained \code{*_FPKM} columns, the heatmap uses log2(FPKM + 1) values
+instead. If FPKM data are requested but unavailable, the function warns and
+falls back to log2FC values.
 }
