@@ -190,11 +190,8 @@ plot_synergy_overlap <- function(synergy_res) {
     ggVennDiagram::ggVennDiagram(sets, label = "count", edge_size = 0.5) +
       ggplot2::scale_fill_gradient(low = "white", high = SYNERGY_COLORS["synergy"]) +
       ggplot2::theme(legend.position = "none")
-  } else if (requireNamespace("eulerr", quietly = TRUE)) {
-    fit <- eulerr::euler(sets[1:3])
-    plot(fit, quantities = TRUE, fills = unname(SYNERGY_COLORS[c("c", "a", "b")]))
   } else {
-    message("Install 'ggVennDiagram' or 'eulerr' for Venn diagrams. Returning NULL.")
+    message("Install 'ggVennDiagram' for Venn diagrams. Returning NULL.")
     NULL
   }
 }

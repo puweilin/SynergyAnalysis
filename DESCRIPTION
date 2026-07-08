@@ -36,6 +36,5 @@ Suggests:
     org.Hs.eg.db,
     enrichplot,
     DOSE,
-    ggVennDiagram,
-    eulerr
+    ggVennDiagram
 RoxygenNote: 7.3.3
