@@ -36,7 +36,23 @@ read_diff_result <- function(filepath) {
       out$gene_id[is.na(out$gene_name) | out$gene_name == "" | out$gene_name == "-"]
   }
 
+  # Drop duplicate gene_id rows (keep first). Downstream merges join on gene_id;
+  # duplicates there cause a cartesian row explosion across the 5 comparisons.
+  out <- drop_duplicate_gene_ids(out, basename(filepath))
+
   out
+}
+
+#' Drop duplicate gene_id rows, warning if any were removed
+#' @keywords internal
+drop_duplicate_gene_ids <- function(df, source_label = "input") {
+  dup <- duplicated(df$gene_id)
+  if (any(dup)) {
+    warning(sprintf("%s: dropped %d duplicate gene_id row(s); keeping first occurrence.",
+                    source_label, sum(dup)))
+    df <- df[!dup, , drop = FALSE]
+  }
+  df
 }
 
 #' Validate a named list of 5 diff result data.frames for synergy analysis
@@ -52,11 +68,12 @@ validate_synergy_inputs <- function(results_list) {
   }
 
   # Read or accept data.frames
-  processed <- lapply(results_list[required_names], function(x) {
+  processed <- lapply(names(results_list[required_names]), function(nm) {
+    x <- results_list[[nm]]
     if (is.character(x)) {
-      read_diff_result(x)
+      read_diff_result(x)          # read_diff_result already dedups
     } else if (is.data.frame(x)) {
-      x
+      drop_duplicate_gene_ids(x, nm)
     } else {
       stop("Each element must be a file path (character) or data.frame")
     }

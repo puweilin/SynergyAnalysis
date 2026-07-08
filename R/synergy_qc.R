@@ -10,8 +10,9 @@
 #' artefactual without trimming real signal:
 #'
 #' \describe{
-#'   \item{min_fpkm}{Mean FPKM threshold. A gene must reach this value in at
-#'     least one sample (when group assignment isn't supplied). Default 1.}
+#'   \item{min_fpkm}{Expression threshold. A gene is kept only if its FPKM
+#'     reaches this value in at least one sample (i.e. the per-gene maximum
+#'     across samples is >= min_fpkm). Default 1.}
 #'   \item{min_detect_frac}{Fraction of samples in which FPKM must exceed
 #'     \code{detect_fpkm} for the gene to be kept. Default 0.5.}
 #'   \item{detect_fpkm}{FPKM value above which a sample counts as "detected".
@@ -66,8 +67,15 @@ apply_gene_qc <- function(merged, fpkm_mat, qc) {
 
   keep <- rep(TRUE, nrow(merged))
 
+  # Did the user ask for expression-based filtering?
+  wants_fpkm_checks <-
+    (isTRUE(qc$min_fpkm > 0)        && !is.na(qc$min_fpkm)) ||
+    (isTRUE(qc$min_detect_frac > 0) && !is.na(qc$min_detect_frac))
+  have_fpkm <- !is.null(fpkm_mat) && nrow(fpkm_mat) > 0 &&
+    length(setdiff(colnames(fpkm_mat), "gene_id")) > 0
+
   # --- FPKM-based checks ---
-  if (!is.null(fpkm_mat) && nrow(fpkm_mat) > 0) {
+  if (have_fpkm) {
     sample_cols <- setdiff(colnames(fpkm_mat), "gene_id")
     if (length(sample_cols) > 0) {
       fpkm_sub <- fpkm_mat[match(merged$gene_id, fpkm_mat$gene_id),
@@ -101,6 +109,17 @@ apply_gene_qc <- function(merged, fpkm_mat, qc) {
         keep <- keep & !fail_det
       }
     }
+  } else if (wants_fpkm_checks) {
+    # User asked for expression QC but the inputs carry no <sample>_FPKM columns
+    # (e.g. plain DESeq2 output). Surface this rather than silently skipping it.
+    warning("Gene QC: no FPKM columns found in the input files; ",
+            "the 'Min FPKM' and 'Detection rate' checks were skipped.")
+    log_df <- rbind(log_df, data.frame(
+      check = "FPKM checks",
+      threshold = "skipped: no _FPKM columns in input",
+      dropped = 0L,
+      stringsAsFactors = FALSE
+    ))
   }
 
   # --- log2FC sanity check (always applied if requested) ---

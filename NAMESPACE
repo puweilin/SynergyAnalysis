@@ -16,3 +16,7 @@ export(kegg_cache_path)
 
 S3method(print, synergy_result)
 S3method(summary, synergy_result)
+
+importFrom(grDevices, colorRampPalette)
+importFrom(stats, setNames)
+importFrom(utils, head, read.delim)

@@ -2,7 +2,8 @@
 # Synergy Analysis Shiny App
 # Single-file app for transcriptomics synergy analysis
 #
-# Launch: shiny::runApp("synergy_framework/shiny/")
+# Preferred launch: SynergyAnalysis::run_synergy_app()
+# From a source clone (no install): shiny::runApp("shiny/")
 #
 
 library(shiny)
@@ -10,28 +11,47 @@ library(bslib)
 library(ggplot2)
 library(plotly)
 library(DT)
-library(dplyr)
-library(tidyr)
-library(readr)
 
 # Increase file upload limit (default 5MB, NHF files are ~65MB each)
 options(shiny.maxRequestSize = 500 * 1024^2)
 
 # Load synergy functions:
 #   - If the SynergyAnalysis package is installed, just attach it.
-#   - Otherwise (running from a source clone), fall back to source()ing the R/ files.
+#   - Otherwise (running from a source clone), locate the repo's R/ directory and
+#     source every implementation file. We search upward from the app's own
+#     location and the working directory so this works whether the app is
+#     launched from ./shiny, ./inst/shiny, or elsewhere.
 if (requireNamespace("SynergyAnalysis", quietly = TRUE)) {
   library(SynergyAnalysis)
 } else {
-  app_dir <- tryCatch(
-    dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")),
-    error = function(e) getwd()
-  )
-  framework_root <- dirname(app_dir)
-  source(file.path(framework_root, "R", "synergy_io.R"))
-  source(file.path(framework_root, "R", "synergy_core.R"))
-  source(file.path(framework_root, "R", "synergy_plot.R"))
-  source(file.path(framework_root, "R", "synergy_report.R"))
+  find_r_dir <- function() {
+    starts <- unique(c(
+      tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")),
+               error = function(e) NULL),
+      normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+    ))
+    for (s in Filter(Negate(is.null), starts)) {
+      d <- s
+      for (i in 1:6) {
+        if (file.exists(file.path(d, "R", "synergy_core.R")))
+          return(file.path(d, "R"))
+        parent <- dirname(d)
+        if (identical(parent, d)) break
+        d <- parent
+      }
+    }
+    NULL
+  }
+  r_dir <- find_r_dir()
+  if (is.null(r_dir)) {
+    stop("Could not locate the SynergyAnalysis R/ sources. Install the package ",
+         "with devtools::install_github('puweilin/SynergyAnalysis'), or launch ",
+         "the app from within a clone of the repository.")
+  }
+  for (f in c("synergy_io.R", "synergy_qc.R", "synergy_kegg.R",
+              "synergy_core.R", "synergy_plot.R", "synergy_report.R")) {
+    source(file.path(r_dir, f))
+  }
 }
 
 # ── Color palette ─────────────────────────────────────────────────────────────
@@ -271,10 +291,11 @@ ui <- page_sidebar(
         tags$div(
           class = "row g-2",
           tags$div(class = "col-3", textInput("col_qvalue",    "Q-value",      "Qvalue",    width = "100%")),
-          tags$div(class = "col-3", textInput("col_updown",    "Direction",    "updown",    width = "100%")),
-          tags$div(class = "col-3", textInput("col_up_value",  "UP value",     "UP",        width = "100%")),
-          tags$div(class = "col-3", textInput("col_down_value","DOWN value",   "DOWN",      width = "100%"))
-        )
+          tags$div(class = "col-3", textInput("col_updown",    "Direction",    "updown",    width = "100%"))
+        ),
+        tags$p(class = "text-muted", style = "font-size:0.75rem; margin-top:0.4rem;",
+               "Synergy direction is taken from the sign of log2FC, so the ",
+               tags$code("Direction"), " column is only used to satisfy the required-column check.")
       )
     ),
 
@@ -505,7 +526,10 @@ server <- function(input, output, session) {
     if (any(sapply(paths, function(x) is.null(x) || nchar(x) == 0))) return(NULL)
 
     # In upload mode, datapath is set once file is uploaded
-    # In local mode, check file existence
+    # In local mode, check file existence.
+    # NOTE: "Read from local disk" reads any path the user types. This is fine
+    # for the intended local/desktop use, but if this app is ever hosted on a
+    # shared server, disable local-path mode (it would expose the server's files).
     if (input$input_mode == "local") {
       missing <- !sapply(paths, file.exists)
       if (any(missing)) {
@@ -771,6 +795,10 @@ server <- function(input, output, session) {
     log2fc <- merged$log2FC_c_vs_nt
     log2fc[is.infinite(log2fc)] <- NA
     nlog10 <- -log10(merged[[pval_c]])
+    # p-values that underflow to 0 give -log10 = Inf; pin them to the finite max
+    # so the most significant genes still render instead of vanishing.
+    finite_max <- suppressWarnings(max(nlog10[is.finite(nlog10)]))
+    if (is.finite(finite_max)) nlog10[is.infinite(nlog10)] <- finite_max
 
     hover <- sprintf("%s\nlog2FC: %.3f\n%s: %.2e",
                      merged$gene_name, merged$log2FC_c_vs_nt,
@@ -827,7 +855,9 @@ server <- function(input, output, session) {
       config(displaylogo = FALSE,
              modeBarButtonsToRemove = c("lasso2d", "select2d", "autoScale2d"))
   }) |>
-    bindCache(synergy_res())
+    # Each analysis run bumps run_btn, so it uniquely keys the cached result —
+    # far cheaper than hashing the whole merged table on every render.
+    bindCache(input$run_btn)
 
   # ── Contribution chart ──────────────────────────────────────────────────────
 
@@ -837,7 +867,7 @@ server <- function(input, output, session) {
     dir <- tolower(input$contrib_dir)
     plot_synergy_contrib(res, n = 20, direction = dir)
   }) |>
-    bindCache(synergy_res(), input$contrib_dir)
+    bindCache(input$run_btn, input$contrib_dir)
 
   # ── Gene detail inspector ───────────────────────────────────────────────────
 
@@ -904,7 +934,7 @@ server <- function(input, output, session) {
         panel.grid.major.x = ggplot2::element_blank()
       )
   }) |>
-    bindCache(synergy_res(), input$detail_gene)
+    bindCache(input$run_btn, input$detail_gene)
 
   output$gene_detail_table <- renderTable({
     res <- synergy_res(); gene <- input$detail_gene

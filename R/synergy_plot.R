@@ -37,6 +37,12 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
 
   merged$log2FC_c_vs_nt_plot <- pmax(-cap, pmin(cap, merged$log2FC_c_vs_nt_plot))
   merged$nlog10_q <- -log10(merged$Qvalue_c_vs_nt)
+  # Q-values that underflow to 0 give -log10 = Inf and would silently drop the
+  # most significant genes from the plot. Pin them to the finite maximum.
+  finite_max <- suppressWarnings(max(merged$nlog10_q[is.finite(merged$nlog10_q)]))
+  if (is.finite(finite_max)) {
+    merged$nlog10_q[is.infinite(merged$nlog10_q)] <- finite_max
+  }
 
   # Label top synergy genes
   merged$label <- ""
@@ -46,9 +52,11 @@ plot_synergy_volcano <- function(synergy_res, highlight_label = 10) {
   merged$label[merged$gene_id %in% label_genes] <-
     merged$gene_name[merged$gene_id %in% label_genes]
 
-  col_map <- c("Synergy UP" = SYNERGY_COLORS["up"],
-               "Synergy DOWN" = SYNERGY_COLORS["down"],
-               "Non-significant" = SYNERGY_COLORS["nonsig"])
+  # unname(): SYNERGY_COLORS["up"] carries the name "up", which would otherwise
+  # make the map key "Synergy UP.up" and silently break scale_color_manual().
+  col_map <- c("Synergy UP"      = unname(SYNERGY_COLORS["up"]),
+               "Synergy DOWN"    = unname(SYNERGY_COLORS["down"]),
+               "Non-significant" = unname(SYNERGY_COLORS["nonsig"]))
 
   p <- ggplot2::ggplot(merged, ggplot2::aes(x = log2FC_c_vs_nt_plot,
                                              y = nlog10_q,
@@ -206,19 +214,25 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
 
   labels <- synergy_res$params$labels
 
-  # Build a log2FC matrix across comparisons
-  fc_mat <- synergy_res$merged_all[
+  # Pull the log2FC rows for the selected genes, keyed by the unique gene_id.
+  fc_cols <- c("log2FC_c_vs_nt", "log2FC_a_vs_nt", "log2FC_b_vs_nt",
+               "log2FC_c_vs_a", "log2FC_c_vs_b")
+  sel <- synergy_res$merged_all[
     synergy_res$merged_all$gene_id %in% all_genes,
-    c("gene_name", "log2FC_c_vs_nt", "log2FC_a_vs_nt", "log2FC_b_vs_nt",
-      "log2FC_c_vs_a", "log2FC_c_vs_b"),
+    c("gene_id", "gene_name", fc_cols),
     drop = FALSE
   ]
 
-  rownames(fc_mat) <- fc_mat$gene_name
-  fc_mat <- fc_mat[, colnames(fc_mat) != "gene_name", drop = FALSE]
+  # Direction is decided per gene_id (unique). Gene symbols can be duplicated
+  # across paralogues, so build unique but still-readable row labels — assigning
+  # duplicated names as rownames would otherwise error.
+  direction  <- ifelse(sel$gene_id %in% synergy_res$synergy_up$gene_id, "UP", "DOWN")
+  row_labels <- make.unique(sel$gene_name)
+
+  fc_mat <- as.matrix(sel[, fc_cols, drop = FALSE])
+  rownames(fc_mat) <- row_labels
 
   # Cap extreme values
-  fc_mat <- as.matrix(fc_mat)
   fc_mat[is.infinite(fc_mat)] <- NA
   max_val <- max(abs(fc_mat), na.rm = TRUE)
   if (max_val == 0 || is.na(max_val)) max_val <- 1
@@ -235,21 +249,15 @@ plot_synergy_heatmap <- function(synergy_res, n_top = 20, use_fpkm = FALSE) {
   )
 
   # Annotation for direction
-  rownames_fc <- rownames(fc_mat)
-  up_names <- synergy_res$synergy_up$gene_name
-  down_names <- synergy_res$synergy_down$gene_name
-  has_up   <- any(rownames_fc %in% up_names)
-  has_down <- any(rownames_fc %in% down_names)
+  has_up   <- any(direction == "UP")
+  has_down <- any(direction == "DOWN")
   dir_levels <- c(if (has_up) "UP", if (has_down) "DOWN")
   dir_colors <- c(if (has_up) stats::setNames(SYNERGY_COLORS["up"], "UP"),
                   if (has_down) stats::setNames(SYNERGY_COLORS["down"], "DOWN"))
 
   anno <- data.frame(
-    Direction = factor(
-      ifelse(rownames(fc_mat) %in% synergy_res$synergy_up$gene_name, "UP", "DOWN"),
-      levels = dir_levels
-    ),
-    row.names = rownames(fc_mat)
+    Direction = factor(direction, levels = dir_levels),
+    row.names = row_labels
   )
   anno_colors <- list(Direction = dir_colors)
 

@@ -17,6 +17,7 @@ BugReports: https://github.com/puweilin/SynergyAnalysis/issues
 Depends:
     R (>= 4.1)
 Imports:
+    grDevices,
     stats,
     utils
 Suggests:

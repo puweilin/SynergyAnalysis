@@ -101,8 +101,11 @@ BiocManager::install(c(
   "clusterProfiler", "org.Hs.eg.db", "enrichplot", "DOSE"
 ))
 
-# Then source the files directly
+# Then source the files directly (order does not matter, but source all six —
+# synergy_core.R depends on the QC and KEGG helpers)
 source("R/synergy_io.R")
+source("R/synergy_qc.R")
+source("R/synergy_kegg.R")
 source("R/synergy_core.R")
 source("R/synergy_plot.R")
 source("R/synergy_report.R")

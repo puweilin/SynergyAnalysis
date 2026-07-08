@@ -39,6 +39,12 @@ generate_report_rmd <- function(synergy_res, title) {
   la_nt <- paste0("log2FC_", la, " vs ", ln)
   lb_nt <- paste0("log2FC_", lb, " vs ", ln)
 
+  crit_text <- if (identical(s$mode, "relaxed")) {
+    "the relaxed synergy criteria (C vs NT significant + magnitude additivity)"
+  } else {
+    "all 4 strict synergy criteria"
+  }
+
   c(
     "---",
     paste0('title: "', title, '"'),
@@ -69,7 +75,7 @@ generate_report_rmd <- function(synergy_res, title) {
     "",
     "## Synergy UP Genes",
     "",
-    paste0("*", s$n_synergy_up, " genes meet all 4 synergy criteria for up-regulation.*"),
+    paste0("*", s$n_synergy_up, " genes meet ", crit_text, " for up-regulation.*"),
     "",
     "```{r up_table}",
     "if (nrow(synergy_res$synergy_up) > 0) {",
@@ -89,7 +95,7 @@ generate_report_rmd <- function(synergy_res, title) {
     "",
     "## Synergy DOWN Genes",
     "",
-    paste0("*", s$n_synergy_down, " genes meet all 4 synergy criteria for down-regulation.*"),
+    paste0("*", s$n_synergy_down, " genes meet ", crit_text, " for down-regulation.*"),
     "",
     "```{r down_table}",
     "if (nrow(synergy_res$synergy_down) > 0) {",
