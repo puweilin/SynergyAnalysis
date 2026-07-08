@@ -40,3 +40,12 @@ run_synergy_app <- function(launch.browser = TRUE, ...) {
   }
   shiny::runApp(app_dir, launch.browser = launch.browser, ...)
 }
+
+# bslib, plotly, and DT are Imports used by the bundled Shiny app
+# (inst/shiny/app.R), not by this package's R code. Reference them here so
+# R CMD check records the dependency instead of flagging an unused Import.
+# This helper is never called.
+#' @noRd
+.app_pkg_refs <- function() {
+  list(bslib::bs_theme, plotly::plot_ly, DT::datatable)
+}

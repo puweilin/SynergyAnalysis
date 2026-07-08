@@ -17,21 +17,21 @@ BugReports: https://github.com/puweilin/SynergyAnalysis/issues
 Depends:
     R (>= 4.1)
 Imports:
+    bslib,
+    DT,
+    ggplot2,
     grDevices,
+    plotly,
+    shiny,
     stats,
     utils
 Suggests:
-    ggplot2,
     ggrepel,
     pheatmap,
     openxlsx,
     rmarkdown,
     knitr,
     stringr,
-    shiny,
-    bslib,
-    DT,
-    plotly,
     clusterProfiler,
     org.Hs.eg.db,
     enrichplot,
