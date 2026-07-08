@@ -29,7 +29,8 @@
 #'   The QC step removes obvious artefacts (low / sporadic expression and
 #'   genes with extreme, unstable log2FC values) before the synergy criteria
 #'   are evaluated.
-#' @param labels Display names for groups: c(nt="NT", a="A", b="B", c="C")
+#' @param labels Display names for groups: c(nt="NT", a="A", b="B", c="A+B").
+#'   The combination group defaults to "A+B" to match the framework's premise.
 #' @return An S3 object of class "synergy_result"
 #' @export
 calculate_synergy <- function(results_list,
@@ -38,7 +39,7 @@ calculate_synergy <- function(results_list,
                                use_qvalue = TRUE,
                                mode = c("strict", "relaxed"),
                                qc = synergy_qc_defaults(),
-                               labels = c(nt = "NT", a = "A", b = "B", c = "C")) {
+                               labels = c(nt = "NT", a = "A", b = "B", c = "A+B")) {
 
   mode <- match.arg(mode)
 

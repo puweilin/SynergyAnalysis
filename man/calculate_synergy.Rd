@@ -11,7 +11,7 @@ calculate_synergy(
   use_qvalue = TRUE,
   mode = c("strict", "relaxed"),
   qc = synergy_qc_defaults(),
-  labels = c(nt = "NT", a = "A", b = "B", c = "C")
+  labels = c(nt = "NT", a = "A", b = "B", c = "A+B")
 )
 }
 \arguments{
@@ -33,7 +33,8 @@ The QC step removes obvious artefacts (low / sporadic expression and
 genes with extreme, unstable log2FC values) before the synergy criteria
 are evaluated.}
 
-\item{labels}{Display names for groups: c(nt="NT", a="A", b="B", c="C")}
+\item{labels}{Display names for groups: c(nt="NT", a="A", b="B", c="A+B").
+The combination group defaults to "A+B" to match the framework's premise.}
 }
 \value{
 An S3 object of class "synergy_result"

@@ -173,12 +173,12 @@ ui <- page_sidebar(
 
         radioButtons("mode", "Synergy mode",
                      choices = c("Strict (4 criteria)" = "strict",
-                                 "Relaxed (C vs NT only)" = "relaxed"),
+                                 "Relaxed (A+B vs NT only)" = "relaxed"),
                      selected = "strict"),
         tags$div(style = "font-size: 0.72rem; color: #6B7A8C; margin-top:-0.25rem; margin-bottom: 0.6rem;",
                  "Strict: all 3 comparisons sig + magnitude.",
                  tags$br(),
-                 "Relaxed: only C vs NT sig + magnitude."),
+                 "Relaxed: only A+B vs NT sig + magnitude."),
         selectInput("pval_col", "Significance column",
                     choices = c("Adjusted P (Qvalue)" = "Qvalue",
                                 "Raw P-value"          = "Pvalue")),
@@ -263,20 +263,20 @@ ui <- page_sidebar(
           # ── Upload mode ──────────────────────────────────────────────
           conditionalPanel(
             "input.input_mode == 'upload'",
-            fileInput("file_c_vs_nt", "C vs NT",  accept = c(".xls", ".tsv", ".txt", ".csv")),
+            fileInput("file_c_vs_nt", "A+B vs NT",  accept = c(".xls", ".tsv", ".txt", ".csv")),
             fileInput("file_a_vs_nt", "A vs NT",  accept = c(".xls", ".tsv", ".txt", ".csv")),
             fileInput("file_b_vs_nt", "B vs NT",  accept = c(".xls", ".tsv", ".txt", ".csv")),
-            fileInput("file_c_vs_a",  "C vs A",   accept = c(".xls", ".tsv", ".txt", ".csv")),
-            fileInput("file_c_vs_b",  "C vs B",   accept = c(".xls", ".tsv", ".txt", ".csv"))
+            fileInput("file_c_vs_a",  "A+B vs A",   accept = c(".xls", ".tsv", ".txt", ".csv")),
+            fileInput("file_c_vs_b",  "A+B vs B",   accept = c(".xls", ".tsv", ".txt", ".csv"))
           ),
           # ── Local path mode ──────────────────────────────────────────
           conditionalPanel(
             "input.input_mode == 'local'",
-            textInput("path_c_vs_nt", "C vs NT",  placeholder = "/full/path/to/C_vs_NT.xls"),
+            textInput("path_c_vs_nt", "A+B vs NT",  placeholder = "/full/path/to/AplusB_vs_NT.xls"),
             textInput("path_a_vs_nt", "A vs NT",  placeholder = "/full/path/to/A_vs_NT.xls"),
             textInput("path_b_vs_nt", "B vs NT",  placeholder = "/full/path/to/B_vs_NT.xls"),
-            textInput("path_c_vs_a",  "C vs A",   placeholder = "/full/path/to/C_vs_A.xls"),
-            textInput("path_c_vs_b",  "C vs B",   placeholder = "/full/path/to/C_vs_B.xls")
+            textInput("path_c_vs_a",  "A+B vs A",   placeholder = "/full/path/to/AplusB_vs_A.xls"),
+            textInput("path_c_vs_b",  "A+B vs B",   placeholder = "/full/path/to/AplusB_vs_B.xls")
           )
         ),
         card(
@@ -284,7 +284,7 @@ ui <- page_sidebar(
           uiOutput("data_status_ui"),
           hr(),
           selectInput("preview_file", "Quick preview",
-                      choices = c("C vs NT", "A vs NT", "B vs NT", "C vs A", "C vs B")),
+                      choices = c("A+B vs NT", "A vs NT", "B vs NT", "A+B vs A", "A+B vs B")),
           DTOutput("preview_table", height = "320px")
         )
       ),
@@ -361,7 +361,7 @@ ui <- page_sidebar(
         # Left column: Volcano on top, Effector Contribution below
         tags$div(
           card(
-            card_header("Volcano Plot  (C vs NT, synergy genes highlighted)"),
+            card_header("Volcano Plot  (A+B vs NT, synergy genes highlighted)"),
             plotlyOutput("volcano_plot", height = "380px")
           ),
           tags$div(style = "height: 0.75rem;"),
@@ -462,11 +462,11 @@ ui <- page_sidebar(
         tags$div(style = "padding: 0.5rem;",
           tags$h6("A gene is called", tags$strong("synergistic UP"), "when ALL 4 criteria are met:"),
           tags$ol(
-            tags$li(tags$strong("C vs NT significant:"), " Q < p_cutoff  and  direction = UP"),
-            tags$li(tags$strong("C vs A significant:"),  " Q < p_cutoff  and  direction = UP"),
-            tags$li(tags$strong("C vs B significant:"),  " Q < p_cutoff  and  direction = UP"),
+            tags$li(tags$strong("A+B vs NT significant:"), " Q < p_cutoff  and  direction = UP"),
+            tags$li(tags$strong("A+B vs A significant:"),  " Q < p_cutoff  and  direction = UP"),
+            tags$li(tags$strong("A+B vs B significant:"),  " Q < p_cutoff  and  direction = UP"),
             tags$li(tags$strong("Increase additivity:"),
-                    " Increase(C vs NT) > Increase(A vs NT) + Increase(B vs NT),",
+                    " Increase(A+B vs NT) > Increase(A vs NT) + Increase(B vs NT),",
                     " where Increase = FC − 1, FC = 2",
                     tags$sup("log2FC"))
           ),
@@ -474,11 +474,11 @@ ui <- page_sidebar(
           tags$hr(),
           tags$h6("Required Input Files (5 pairwise comparisons):"),
           tags$ul(
-            tags$li(tags$code("C vs NT"), " — Combination treatment vs Control"),
+            tags$li(tags$code("A+B vs NT"), " — Combination treatment vs Control"),
             tags$li(tags$code("A vs NT"), " — Treatment A alone vs Control"),
             tags$li(tags$code("B vs NT"), " — Treatment B alone vs Control"),
-            tags$li(tags$code("C vs A"),  " — Combination vs A alone"),
-            tags$li(tags$code("C vs B"),  " — Combination vs B alone")
+            tags$li(tags$code("A+B vs A"),  " — Combination vs A alone"),
+            tags$li(tags$code("A+B vs B"),  " — Combination vs B alone")
           ),
           tags$hr(),
           tags$h6("Expected File Format:"),
@@ -528,7 +528,7 @@ server <- function(input, output, session) {
       if (input$input_mode == "local" && !file.exists(p)) return("missing")
       return("ready")
     })
-    names(vals) <- c("C vs NT", "A vs NT", "B vs NT", "C vs A", "C vs B")
+    names(vals) <- c("A+B vs NT", "A vs NT", "B vs NT", "A+B vs A", "A+B vs B")
     vals
   })
 
@@ -613,7 +613,7 @@ server <- function(input, output, session) {
     status <- file_status()
     n_ready <- sum(status == "ready")
     n_total <- length(status)
-    labels <- c("C vs NT", "A vs NT", "B vs NT", "C vs A", "C vs B")
+    labels <- c("A+B vs NT", "A vs NT", "B vs NT", "A+B vs A", "A+B vs B")
 
     if (!is.null(data)) {
       n_genes <- nrow(data$c_vs_nt)
@@ -647,8 +647,8 @@ server <- function(input, output, session) {
     if (is.null(data)) return(NULL)
 
     idx <- switch(input$preview_file,
-      "C vs NT" = "c_vs_nt", "A vs NT" = "a_vs_nt", "B vs NT" = "b_vs_nt",
-      "C vs A"  = "c_vs_a",  "C vs B"  = "c_vs_b"
+      "A+B vs NT" = "c_vs_nt", "A vs NT" = "a_vs_nt", "B vs NT" = "b_vs_nt",
+      "A+B vs A"  = "c_vs_a",  "A+B vs B"  = "c_vs_b"
     )
     df <- data[[idx]]
     display_cols <- intersect(
@@ -848,7 +848,7 @@ server <- function(input, output, session) {
             text = ~hover, hoverinfo = "text",
             hovertemplate = "%{text}<extra></extra>") |>
       layout(
-        xaxis = list(title = "log2FC  (C vs NT)", zeroline = TRUE,
+        xaxis = list(title = "log2FC  (A+B vs NT)", zeroline = TRUE,
                      zerolinecolor = "#DDD", gridcolor = "#F0F0F0"),
         yaxis = list(title = sprintf("-log10(%s)", vd$pval_name),
                      gridcolor = "#F0F0F0"),
